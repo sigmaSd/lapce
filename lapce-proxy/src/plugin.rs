@@ -5,7 +5,7 @@ use hotwatch::Hotwatch;
 use lapce_rpc::counter::Counter;
 use lapce_rpc::plugin::{PluginDescription, PluginId, PluginInfo, PluginRpcMessage};
 use lapce_rpc::proxy::{
-    CoreProxyNotification, CoreProxyRequest, ProxyResponse, ProxyRpcMessage,
+    CoreProxyNotification, CoreProxyRequest, CoreProxyResponse, ProxyRpcMessage,
 };
 use lapce_rpc::{NewHandler, NewRpcHandler, RequestId, RpcMessage};
 use serde::de::DeserializeOwned;
@@ -48,7 +48,7 @@ pub(crate) struct NewPlugin {
     env: NewPluginEnv,
 }
 
-impl NewHandler<CoreProxyRequest, CoreProxyNotification, ProxyResponse>
+impl NewHandler<CoreProxyRequest, CoreProxyNotification, CoreProxyResponse>
     for NewPlugin
 {
     fn handle_notification(&mut self, rpc: CoreProxyNotification) {

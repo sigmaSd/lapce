@@ -22,7 +22,7 @@ use lapce_rpc::file::FileNodeItem;
 use lapce_rpc::lsp::LspRpcMessage;
 use lapce_rpc::plugin::PluginRpcMessage;
 use lapce_rpc::proxy::{
-    CoreProxyNotification, CoreProxyRequest, ProxyResponse, ProxyRpcMessage,
+    CoreProxyNotification, CoreProxyRequest, CoreProxyResponse, ProxyRpcMessage,
     ReadDirResponse,
 };
 use lapce_rpc::source_control::{DiffInfo, FileDiff};
@@ -91,7 +91,11 @@ impl NewDispatcher {
         }
     }
 
-    fn respond_rpc(&self, id: RequestId, result: Result<CoreResponse, RpcError>) {
+    fn respond_rpc(
+        &self,
+        id: RequestId,
+        result: Result<CoreProxyResponse, RpcError>,
+    ) {
         respond_rpc(&self.core_sender, id, result);
     }
 
@@ -105,14 +109,14 @@ impl NewDispatcher {
                 eprintln!("respond new buffer");
                 self.respond_rpc(
                     id,
-                    Ok(CoreResponse::NewBufferResponse { content }),
+                    Ok(CoreProxyResponse::NewBufferResponse { content }),
                 );
             }
             BufferHead { buffer_id, path } => {
                 let result = if let Some(workspace) = self.workspace.as_ref() {
                     let result = file_get_head(&workspace, &path);
                     if let Ok((_blob_id, content)) = result {
-                        Ok(CoreResponse::BufferHeadResponse {
+                        Ok(CoreProxyResponse::BufferHeadResponse {
                             version: "head".to_string(),
                             content,
                         })
@@ -185,7 +189,7 @@ impl NewDispatcher {
                                 }
                             }
                         }
-                        Ok(CoreResponse::GetFilesResponse { items })
+                        Ok(CoreProxyResponse::GetFilesResponse { items })
                     } else {
                         Err(RpcError {
                             code: 0,
@@ -221,7 +225,7 @@ impl NewDispatcher {
                                 })
                                 .collect::<HashMap<PathBuf, FileNodeItem>>();
 
-                            CoreResponse::ReadDirResponse { items }
+                            CoreProxyResponse::ReadDirResponse { items }
                         })
                         .map_err(|e| RpcError {
                             code: 0,
@@ -1085,7 +1089,7 @@ impl Dispatcher {
 fn respond_rpc(
     core_sender: &Sender<CoreRpcMessage>,
     id: RequestId,
-    result: Result<CoreResponse, RpcError>,
+    result: Result<CoreProxyResponse, RpcError>,
 ) {
     let msg = match result {
         Ok(r) => CoreRpcMessage::Response(id, r),

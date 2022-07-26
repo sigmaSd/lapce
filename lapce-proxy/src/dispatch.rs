@@ -154,7 +154,7 @@ impl NewDispatcher {
                 request_id,
                 buffer_id,
                 position,
-            } => todo!(),
+            } => {}
             GlobalSearch { pattern } => todo!(),
             CompletionResolve {
                 buffer_id,

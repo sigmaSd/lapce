@@ -248,9 +248,7 @@ impl LapceProxy {
     }
 
     fn start(&self, workspace: LapceWorkspace) -> Result<()> {
-        if let Some(path) = workspace.path.as_ref() {
-            self.initialize(path.clone());
-        }
+        self.initialize(workspace.path.clone());
         let (core_sender, core_receiver) = crossbeam_channel::unbounded();
         let (new_core_sender, new_core_receiver) = crossbeam_channel::unbounded();
         match workspace.kind {
@@ -359,7 +357,7 @@ impl LapceProxy {
         Ok(())
     }
 
-    pub fn initialize(&self, workspace: PathBuf) {
+    pub fn initialize(&self, workspace: Option<PathBuf>) {
         self.new_rpc
             .send_core_notification(CoreProxyNotification::Initialize { workspace });
     }

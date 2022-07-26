@@ -35,6 +35,7 @@ use wasmer_wasi::WasiState;
 use wasmtime_wasi::WasiCtxBuilder;
 
 use crate::dispatch::Dispatcher;
+use crate::lsp::NewLspClient;
 
 pub type PluginName = String;
 
@@ -45,6 +46,12 @@ pub enum PluginRequest {}
 
 pub enum NewPluginNotification {
     PluginLoaded(NewPlugin),
+    StartLspServer {
+        exec_path: String,
+        language_id: String,
+        options: Option<Value>,
+        system_lsp: Option<bool>,
+    },
 }
 
 #[derive(WasmerEnv, Clone)]
@@ -58,18 +65,6 @@ pub struct NewPluginEnv {
 pub struct NewPlugin {
     instance: wasmer::Instance,
     env: NewPluginEnv,
-}
-
-impl NewHandler<PluginProxyRequest, PluginProxyNotification, PluginResponse>
-    for NewPlugin
-{
-    fn handle_notification(&mut self, rpc: PluginProxyNotification) {
-        todo!()
-    }
-
-    fn handle_request(&mut self, rpc: PluginProxyRequest) {
-        todo!()
-    }
 }
 
 #[derive(WasmerEnv, Clone)]
@@ -96,6 +91,7 @@ pub struct NewPluginCatalog {
     proxy_sender: Sender<ProxyRpcMessage>,
     rpc: ProxyRpcHandler<PluginProxyResponse>,
     plugins: Vec<NewPlugin>,
+    lsps: Vec<NewLspClient>,
 }
 
 impl NewHandler<PluginRequest, NewPluginNotification, PluginProxyResponse>
@@ -106,6 +102,12 @@ impl NewHandler<PluginRequest, NewPluginNotification, PluginProxyResponse>
             NewPluginNotification::PluginLoaded(plugin) => {
                 self.plugins.push(plugin);
             }
+            NewPluginNotification::StartLspServer {
+                exec_path,
+                language_id,
+                options,
+                system_lsp,
+            } => todo!(),
         }
     }
 
@@ -126,6 +128,7 @@ impl NewPluginCatalog {
             plugin_sender,
             rpc: rpc.clone(),
             plugins: Vec::new(),
+            lsps: Vec::new(),
         };
 
         rpc.mainloop(plugin_receiver, &mut plugin);
@@ -203,6 +206,8 @@ impl NewPluginCatalog {
 
         Ok(())
     }
+
+    fn start_lsp() {}
 }
 
 pub struct PluginCatalog {

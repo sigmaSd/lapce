@@ -22,7 +22,8 @@ use lapce_rpc::file::FileNodeItem;
 use lapce_rpc::lsp::LspRpcMessage;
 use lapce_rpc::plugin::PluginRpcMessage;
 use lapce_rpc::proxy::{
-    ProxyNotification, ProxyRequest, ProxyResponse, ProxyRpcMessage, ReadDirResponse,
+    CoreProxyNotification, CoreProxyRequest, ProxyResponse, ProxyRpcMessage,
+    ReadDirResponse,
 };
 use lapce_rpc::source_control::{DiffInfo, FileDiff};
 use lapce_rpc::terminal::TermId;
@@ -94,8 +95,8 @@ impl NewDispatcher {
         respond_rpc(&self.core_sender, id, result);
     }
 
-    fn handle_request(&mut self, id: RequestId, rpc: ProxyRequest) {
-        use ProxyRequest::*;
+    fn handle_request(&mut self, id: RequestId, rpc: CoreProxyRequest) {
+        use CoreProxyRequest::*;
         match rpc {
             NewBuffer { buffer_id, path } => {
                 let buffer = Buffer::new(buffer_id, path.clone());
@@ -243,8 +244,8 @@ impl NewDispatcher {
         }
     }
 
-    fn handle_notification(&mut self, rpc: ProxyNotification) {
-        use ProxyNotification::*;
+    fn handle_notification(&mut self, rpc: CoreProxyNotification) {
+        use CoreProxyNotification::*;
         match rpc {
             Initialize { workspace } => {
                 self.workspace = Some(workspace);
@@ -358,12 +359,12 @@ impl Dispatcher {
             let rpc: RpcObject = msg.into();
             if rpc.is_response() {
             } else {
-                match rpc.into_rpc::<ProxyNotification, ProxyRequest>() {
+                match rpc.into_rpc::<CoreProxyNotification, CoreProxyRequest>() {
                     Ok(Call::Request(id, request)) => {
                         self.handle_request(id, request);
                     }
                     Ok(Call::Notification(notification)) => {
-                        if let ProxyNotification::Shutdown {} = &notification {
+                        if let CoreProxyNotification::Shutdown {} = &notification {
                             for (_, sender) in self.terminals.lock().iter() {
                                 #[allow(deprecated)]
                                 let _ = sender.send(Msg::Shutdown);
@@ -564,8 +565,8 @@ impl Dispatcher {
         }
     }
 
-    fn handle_notification(&self, rpc: ProxyNotification) {
-        use ProxyNotification::*;
+    fn handle_notification(&self, rpc: CoreProxyNotification) {
+        use CoreProxyNotification::*;
         match rpc {
             Initialize { workspace } => {
                 *self.workspace.lock() = Some(workspace.clone());
@@ -784,8 +785,8 @@ impl Dispatcher {
         }
     }
 
-    fn handle_request(&self, id: RequestId, rpc: ProxyRequest) {
-        use ProxyRequest::*;
+    fn handle_request(&self, id: RequestId, rpc: CoreProxyRequest) {
+        use CoreProxyRequest::*;
         match rpc {
             NewBuffer { buffer_id, path } => {
                 self.file_watcher.lock().as_mut().unwrap().watch(

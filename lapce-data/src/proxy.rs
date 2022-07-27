@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::BufReader;
+use std::io::{BufRead, BufReader};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::path::Path;
@@ -15,16 +15,19 @@ use druid::{ExtEventSink, WidgetId};
 use flate2::read::GzDecoder;
 use lapce_proxy::dispatch::{Dispatcher, NewDispatcher};
 use lapce_rpc::buffer::{BufferHeadResponse, BufferId, NewBufferResponse};
-use lapce_rpc::core::{CoreNotification, CoreRequest, CoreResponse, CoreRpcMessage};
+use lapce_rpc::core::{
+    CoreHandler, CoreNotification, CoreRequest, CoreResponse, CoreRpcHandler,
+    CoreRpcMessage,
+};
 use lapce_rpc::plugin::PluginDescription;
 use lapce_rpc::proxy::{
-    CoreProxyNotification, CoreProxyRequest, CoreProxyResponse, NewHandler,
+    CoreProxyNotification, CoreProxyRequest, CoreProxyResponse, CoreProxyRpcMessage,
     ProxyRpcHandler, ProxyRpcMessage, ReadDirResponse,
 };
 use lapce_rpc::source_control::FileDiff;
 use lapce_rpc::style::SemanticStyles;
 use lapce_rpc::terminal::TermId;
-use lapce_rpc::{stdio_transport, Callback, RpcError};
+use lapce_rpc::{stdio_transport, Callback, RpcError, RpcMessage, RpcObject};
 use lapce_rpc::{ControlFlow, Handler};
 use lapce_rpc::{NewRpcHandler, RpcHandler};
 use lsp_types::request::GotoTypeDefinitionResponse;
@@ -75,7 +78,8 @@ pub enum RequestError {
 pub struct LapceProxy {
     pub tab_id: WidgetId,
     rpc: RpcHandler,
-    new_rpc: ProxyRpcHandler<CoreProxyResponse>,
+    pub proxy_rpc: ProxyRpcHandler,
+    core_rpc: CoreRpcHandler,
     proxy_receiver: Arc<Receiver<Value>>,
     new_proxy_sender: Arc<Sender<ProxyRpcMessage>>,
     new_proxy_receiver: Arc<Receiver<ProxyRpcMessage>>,
@@ -83,9 +87,24 @@ pub struct LapceProxy {
     event_sink: ExtEventSink,
 }
 
-impl NewHandler<CoreRequest, CoreNotification, CoreProxyResponse> for LapceProxy {
+impl CoreHandler for LapceProxy {
     fn handle_notification(&mut self, rpc: CoreNotification) {
-        todo!()
+        use CoreNotification::*;
+        match rpc {
+            ProxyConnected {} => todo!(),
+            OpenFileChanged { path, content } => todo!(),
+            ReloadBuffer { path, content, rev } => todo!(),
+            WorkspaceFileChange {} => todo!(),
+            PublishDiagnostics { diagnostics } => todo!(),
+            WorkDoneProgress { progress } => todo!(),
+            HomeDir { path } => todo!(),
+            InstalledPlugins { plugins } => todo!(),
+            ListDir { items } => todo!(),
+            DiffFiles { files } => todo!(),
+            DiffInfo { diff } => todo!(),
+            UpdateTerminal { term_id, content } => todo!(),
+            CloseTerminal { term_id } => todo!(),
+        }
     }
 
     fn handle_request(&mut self, rpc: CoreRequest) {
@@ -216,12 +235,14 @@ impl LapceProxy {
         let rpc = RpcHandler::new(proxy_sender);
 
         let (new_proxy_sender, new_proxy_receiver) = crossbeam_channel::unbounded();
-        let new_rpc = ProxyRpcHandler::new(new_proxy_sender.clone());
+        let proxy_rpc = ProxyRpcHandler::new();
+        let core_rpc = CoreRpcHandler::new();
 
         let proxy = Self {
             tab_id,
             rpc,
-            new_rpc,
+            proxy_rpc,
+            core_rpc,
             proxy_receiver: Arc::new(proxy_receiver),
             new_proxy_receiver: Arc::new(new_proxy_receiver),
             new_proxy_sender: Arc::new(new_proxy_sender),
@@ -248,7 +269,7 @@ impl LapceProxy {
     }
 
     fn start(&self, workspace: LapceWorkspace) -> Result<()> {
-        self.initialize(workspace.path.clone());
+        self.proxy_rpc.initialize(workspace.path.clone());
         let (core_sender, core_receiver) = crossbeam_channel::unbounded();
         let (new_core_sender, new_core_receiver) = crossbeam_channel::unbounded();
         match workspace.kind {
@@ -261,10 +282,18 @@ impl LapceProxy {
 
                 let new_proxy_sender = (*self.new_proxy_sender).clone();
                 let new_proxy_receiver = (*self.new_proxy_receiver).clone();
+                let proxy_rpc = self.proxy_rpc.clone();
+                let core_rpc = self.core_rpc.clone();
+
                 thread::spawn(move || {
-                    let mut dispatcher =
-                        NewDispatcher::new(new_core_sender, new_proxy_sender);
-                    dispatcher.mainloop(new_proxy_receiver);
+                    let mut dispatcher = NewDispatcher::new(
+                        new_core_sender,
+                        new_proxy_sender,
+                        core_rpc,
+                        proxy_rpc,
+                    );
+                    let proxy_rpc = dispatcher.proxy_rpc.clone();
+                    proxy_rpc.mainloop(&mut dispatcher);
                 });
             }
             LapceWorkspaceType::RemoteSSH(user, host) => {
@@ -282,7 +311,7 @@ impl LapceProxy {
 
         let mut proxy = self.clone();
         let mut handler = self.clone();
-        proxy.new_rpc.mainloop(new_core_receiver, &mut handler);
+        proxy.core_rpc.mainloop(&mut handler);
 
         let mut proxy = self.clone();
         let mut handler = self.clone();
@@ -344,22 +373,31 @@ impl LapceProxy {
             .stdin
             .take()
             .ok_or_else(|| anyhow!("can't find stdin"))?;
-        let stdout = BufReader::new(
+        let mut stdout = BufReader::new(
             child
                 .stdout
                 .take()
                 .ok_or_else(|| anyhow!("can't find stdout"))?,
         );
 
-        let proxy_receiver = (*self.proxy_receiver).clone();
-        stdio_transport(stdin, proxy_receiver, stdout, core_sender);
+        // stdio_transport(stdin, proxy_receiver, stdout, core_sender);
+
+        let core_rpc = self.core_rpc.clone();
+        thread::spawn(move || -> Result<()> {
+            loop {
+                let msg = read_msg(&mut stdout)?;
+                match msg {
+                    RpcMessage::Request(_, _) => todo!(),
+                    RpcMessage::Notification(n) => {
+                        core_rpc.send_notification(n);
+                    }
+                    RpcMessage::Response(_, _) => todo!(),
+                    RpcMessage::Error(_, _) => todo!(),
+                }
+            }
+        });
 
         Ok(())
-    }
-
-    pub fn initialize(&self, workspace: Option<PathBuf>) {
-        self.new_rpc
-            .send_core_notification(CoreProxyNotification::Initialize { workspace });
     }
 
     pub fn terminal_close(&self, term_id: TermId) {
@@ -504,18 +542,6 @@ impl LapceProxy {
             "global_search",
             &json!({ "pattern": pattern }),
             box_json_cb(f),
-        );
-    }
-
-    pub fn new_buffer(
-        &self,
-        buffer_id: BufferId,
-        path: PathBuf,
-        f: impl FnOnce(Result<CoreProxyResponse, RpcError>) + Send + 'static,
-    ) {
-        self.new_rpc.send_core_request_async(
-            CoreProxyRequest::NewBuffer { buffer_id, path },
-            Box::new(f),
         );
     }
 
@@ -685,29 +711,6 @@ impl LapceProxy {
                 "position": position,
             }),
             box_json_cb(f),
-        );
-    }
-
-    pub fn get_files(
-        &self,
-        f: impl FnOnce(Result<CoreProxyResponse, RpcError>) + Send + 'static,
-    ) {
-        self.new_rpc.send_core_request_async(
-            CoreProxyRequest::GetFiles {
-                path: "path".into(),
-            },
-            Box::new(f),
-        );
-    }
-
-    pub fn read_dir(
-        &self,
-        path: &Path,
-        f: impl FnOnce(Result<CoreProxyResponse, RpcError>) + Send + 'static,
-    ) {
-        self.new_rpc.send_core_request_async(
-            CoreProxyRequest::ReadDir { path: path.into() },
-            Box::new(f),
         );
     }
 
@@ -1024,4 +1027,36 @@ fn box_json_cb<
             serde_json::from_value::<T>(x).map_err(RequestError::Deser)
         }))
     })
+}
+
+fn read_msg<R: BufRead>(reader: &mut R) -> Result<CoreRpcMessage> {
+    let mut buf = String::new();
+    let _s = reader.read_line(&mut buf)?;
+    let value: Value = serde_json::from_str(&buf)?;
+    let object = RpcObject(value);
+    let is_response = object.is_response();
+    let msg = if is_response {
+        let id = object.get_id().ok_or_else(|| anyhow!("no id"))?;
+        let resp = object.into_response().map_err(|e| anyhow!(e))?;
+        match resp {
+            Ok(value) => {
+                todo!()
+            }
+            Err(value) => {
+                todo!()
+            }
+        }
+    } else {
+        match object.get_id() {
+            Some(id) => {
+                let req: CoreRequest = serde_json::from_value(object.0)?;
+                RpcMessage::Request(id, req)
+            }
+            None => {
+                let notif: CoreNotification = serde_json::from_value(object.0)?;
+                RpcMessage::Notification(notif)
+            }
+        }
+    };
+    Ok(msg)
 }

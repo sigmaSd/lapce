@@ -24,10 +24,7 @@ use lapce_rpc::proxy::{
 };
 use lapce_rpc::source_control::{DiffInfo, FileDiff};
 use lapce_rpc::terminal::TermId;
-use lapce_rpc::{
-    self, Call, NewHandler, NewRpcHandler, RequestId, RpcError, RpcMessage,
-    RpcObject,
-};
+use lapce_rpc::{self, Call, RequestId, RpcError, RpcObject};
 use parking_lot::Mutex;
 use serde_json::json;
 use serde_json::Value;
@@ -49,6 +46,7 @@ pub struct NewDispatcher {
     core_rpc: CoreRpcHandler,
     plugin_rpc: PluginCatalogRpcHandler,
     buffers: HashMap<PathBuf, Buffer>,
+    terminals: HashMap<TermId, mio::channel::Sender<Msg>>,
 }
 
 impl ProxyHandler for NewDispatcher {
@@ -70,7 +68,9 @@ impl ProxyHandler for NewDispatcher {
                 request_id,
                 path,
                 position,
-            } => {}
+            } => {
+                self.plugin_rpc.completion(request_id, &path, position);
+            }
             Shutdown {} => todo!(),
             Update {
                 buffer_id,
@@ -81,7 +81,47 @@ impl ProxyHandler for NewDispatcher {
                 term_id,
                 cwd,
                 shell,
-            } => todo!(),
+            } => {
+                let mut terminal = Terminal::new(term_id, cwd, shell, 50, 10);
+                let tx = terminal.tx.clone();
+                self.terminals.insert(term_id, tx);
+                let rpc = self.core_rpc.clone();
+                thread::spawn(move || {
+                    terminal.run(rpc);
+                });
+            }
+            TerminalWrite { term_id, content } => {
+                if let Some(tx) = self.terminals.get(&term_id) {
+                    #[allow(deprecated)]
+                    let _ = tx.send(Msg::Input(content.into_bytes().into()));
+                }
+            }
+            TerminalResize {
+                term_id,
+                width,
+                height,
+            } => {
+                if let Some(tx) = self.terminals.get(&term_id) {
+                    let size = SizeInfo::new(
+                        width as f32,
+                        height as f32,
+                        1.0,
+                        1.0,
+                        0.0,
+                        0.0,
+                        true,
+                    );
+
+                    #[allow(deprecated)]
+                    let _ = tx.send(Msg::Resize(size));
+                }
+            }
+            TerminalClose { term_id } => {
+                if let Some(tx) = self.terminals.remove(&term_id) {
+                    #[allow(deprecated)]
+                    let _ = tx.send(Msg::Shutdown);
+                }
+            }
             InstallPlugin { plugin } => todo!(),
             GitCommit { message, diffs } => todo!(),
             GitCheckout { branch } => todo!(),
@@ -89,13 +129,6 @@ impl ProxyHandler for NewDispatcher {
             GitDiscardFilesChanges { files } => todo!(),
             GitDiscardWorkspaceChanges {} => todo!(),
             GitInit {} => todo!(),
-            TerminalWrite { term_id, content } => todo!(),
-            TerminalResize {
-                term_id,
-                width,
-                height,
-            } => todo!(),
-            TerminalClose { term_id } => todo!(),
         }
     }
 
@@ -117,9 +150,9 @@ impl ProxyHandler for NewDispatcher {
                     Ok(CoreProxyResponse::NewBufferResponse { content }),
                 );
             }
-            BufferHead { buffer_id, path } => {
+            BufferHead { path } => {
                 let result = if let Some(workspace) = self.workspace.as_ref() {
-                    let result = file_get_head(&workspace, &path);
+                    let result = file_get_head(workspace, &path);
                     if let Ok((_blob_id, content)) = result {
                         Ok(CoreProxyResponse::BufferHeadResponse {
                             version: "head".to_string(),
@@ -263,8 +296,9 @@ impl NewDispatcher {
             workspace: None,
             proxy_rpc,
             core_rpc,
-            buffers: HashMap::new(),
             plugin_rpc,
+            buffers: HashMap::new(),
+            terminals: HashMap::new(),
         }
     }
 
@@ -685,15 +719,7 @@ impl Dispatcher {
                 term_id,
                 cwd,
                 shell,
-            } => {
-                let mut terminal = Terminal::new(term_id, cwd, shell, 50, 10);
-                let tx = terminal.tx.clone();
-                self.terminals.lock().insert(term_id, tx);
-                let dispatcher = self.clone();
-                std::thread::spawn(move || {
-                    terminal.run(dispatcher);
-                });
-            }
+            } => {}
             TerminalClose { term_id } => {
                 let mut terminals = self.terminals.lock();
                 if let Some(tx) = terminals.remove(&term_id) {

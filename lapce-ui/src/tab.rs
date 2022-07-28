@@ -926,7 +926,7 @@ impl LapceTab {
                                 ),
                                 Target::Widget(terminal.split_id),
                             ));
-                            data.proxy.terminal_close(terminal.term_id);
+                            data.proxy.proxy_rpc.terminal_close(terminal.term_id);
                         }
                         ctx.set_handled();
                     }

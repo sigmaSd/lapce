@@ -400,36 +400,6 @@ impl LapceProxy {
         Ok(())
     }
 
-    pub fn terminal_close(&self, term_id: TermId) {
-        self.rpc.send_rpc_notification(
-            "terminal_close",
-            &json!({
-                "term_id": term_id,
-            }),
-        )
-    }
-
-    pub fn terminal_resize(&self, term_id: TermId, width: usize, height: usize) {
-        self.rpc.send_rpc_notification(
-            "terminal_resize",
-            &json!({
-                "term_id": term_id,
-                "width": width,
-                "height": height,
-            }),
-        )
-    }
-
-    pub fn terminal_write(&self, term_id: TermId, content: &str) {
-        self.rpc.send_rpc_notification(
-            "terminal_write",
-            &json!({
-                "term_id": term_id,
-                "content": content,
-            }),
-        )
-    }
-
     pub fn new_terminal(
         &self,
         term_id: TermId,

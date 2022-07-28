@@ -6,15 +6,11 @@ pub mod wasi;
 use anyhow::{anyhow, Result};
 use crossbeam_channel::{Receiver, Sender};
 use home::home_dir;
-use jsonrpc_lite::{Id, JsonRpc};
+use jsonrpc_lite::Id;
 use lapce_rpc::counter::Counter;
-use lapce_rpc::plugin::{PluginDescription, PluginId, PluginInfo, PluginResponse};
-use lapce_rpc::proxy::{
-    CoreProxyNotification, CoreProxyRequest, CoreProxyResponse,
-    PluginProxyNotification, PluginProxyRequest, PluginProxyResponse,
-    ProxyRpcHandler, ProxyRpcMessage,
-};
-use lapce_rpc::{NewRpcHandler, RequestId, RpcError, RpcMessage};
+use lapce_rpc::plugin::{PluginDescription, PluginId};
+use lapce_rpc::proxy::PluginProxyResponse;
+use lapce_rpc::{RequestId, RpcError, RpcMessage};
 use lsp_types::notification::{DidOpenTextDocument, Notification};
 use lsp_types::request::{Completion, Request};
 use lsp_types::{
@@ -35,7 +31,6 @@ use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use toml;
-use wasmer::ImportObject;
 use wasmer::Store;
 use wasmer::WasmerEnv;
 use wasmer_wasi::WasiEnv;
@@ -43,11 +38,7 @@ use wasmer_wasi::WasiEnv;
 use crate::dispatch::Dispatcher;
 
 use self::catalog::NewPluginCatalog;
-use self::psp::{
-    PluginHandlerNotification, PluginServerHandler, PluginServerRpc,
-    PluginServerRpcHandler,
-};
-use self::wasi::NewPlugin;
+use self::psp::PluginServerRpcHandler;
 
 pub type PluginName = String;
 

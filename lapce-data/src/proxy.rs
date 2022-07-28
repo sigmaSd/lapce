@@ -104,6 +104,7 @@ impl CoreHandler for LapceProxy {
             DiffInfo { diff } => todo!(),
             UpdateTerminal { term_id, content } => todo!(),
             CloseTerminal { term_id } => todo!(),
+            CompletionResponse { .. } => todo!(),
         }
     }
 
@@ -215,6 +216,7 @@ impl Handler for LapceProxy {
                     Target::Widget(self.tab_id),
                 );
             }
+            CompletionResponse { .. } => todo!(),
         }
         ControlFlow::Continue
     }

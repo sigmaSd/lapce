@@ -72,11 +72,13 @@ impl ProxyHandler for NewDispatcher {
                 self.plugin_rpc.completion(request_id, &path, position);
             }
             Shutdown {} => todo!(),
-            Update {
-                buffer_id,
-                delta,
-                rev,
-            } => todo!(),
+            Update { path, delta, rev } => {
+                let buffer = self.buffers.get_mut(&path).unwrap();
+                if let Some(content_change) = buffer.update(&delta, rev) {
+                    todo!()
+                    // self.lsp.lock().update(buffer, &content_change, buffer.rev);
+                }
+            }
             NewTerminal {
                 term_id,
                 cwd,
@@ -214,7 +216,7 @@ impl ProxyHandler for NewDispatcher {
             GetDocumentSymbols { buffer_id } => todo!(),
             GetWorkspaceSymbols { query, buffer_id } => todo!(),
             GetDocumentFormatting { buffer_id } => todo!(),
-            GetFiles { path } => {
+            GetFiles { .. } => {
                 let workspace = self.workspace.clone();
                 let proxy_rpc = self.proxy_rpc.clone();
                 thread::spawn(move || {
@@ -272,7 +274,17 @@ impl ProxyHandler for NewDispatcher {
                     proxy_rpc.handle_response(id, result);
                 });
             }
-            Save { rev, buffer_id } => todo!(),
+            Save { rev, path } => {
+                let buffer = self.buffers.get_mut(&path).unwrap();
+                let result = buffer
+                    .save(rev)
+                    .map(|_r| CoreProxyResponse::SaveResponse {})
+                    .map_err(|e| RpcError {
+                        code: 0,
+                        message: e.to_string(),
+                    });
+                self.respond_rpc(id, result);
+            }
             SaveBufferAs {
                 buffer_id,
                 path,
@@ -621,17 +633,7 @@ impl Dispatcher {
                 }
             }
             Shutdown {} => {}
-            Update {
-                buffer_id,
-                delta,
-                rev,
-            } => {
-                let mut buffers = self.buffers.lock();
-                let buffer = buffers.get_mut(&buffer_id).unwrap();
-                if let Some(content_change) = buffer.update(&delta, rev) {
-                    self.lsp.lock().update(buffer, &content_change, buffer.rev);
-                }
-            }
+            Update { path, delta, rev } => {}
             InstallPlugin { plugin } => {
                 let catalog = self.plugins.clone();
                 let dispatcher = self.clone();
@@ -998,14 +1000,14 @@ impl Dispatcher {
                     });
                 }
             }
-            Save { rev, buffer_id } => {
-                if let Some(workspace) = self.workspace.lock().as_ref() {
-                    let mut buffers = self.buffers.lock();
-                    let buffer = buffers.get_mut(&buffer_id).unwrap();
-                    let resp = buffer.save(rev).map(|_r| json!({}));
-                    self.lsp.lock().save_buffer(buffer, workspace);
-                    self.respond(id, resp);
-                }
+            Save { rev, path } => {
+                // if let Some(workspace) = self.workspace.lock().as_ref() {
+                //     let mut buffers = self.buffers.lock();
+                //     let buffer = buffers.get_mut(&buffer_id).unwrap();
+                //     let resp = buffer.save(rev).map(|_r| json!({}));
+                //     self.lsp.lock().save_buffer(buffer, workspace);
+                //     self.respond(id, resp);
+                // }
             }
             SaveBufferAs {
                 buffer_id,

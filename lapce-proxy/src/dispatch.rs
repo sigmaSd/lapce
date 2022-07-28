@@ -44,7 +44,7 @@ pub struct NewDispatcher {
     workspace: Option<PathBuf>,
     pub proxy_rpc: ProxyRpcHandler,
     core_rpc: CoreRpcHandler,
-    plugin_rpc: PluginCatalogRpcHandler,
+    catalog_rpc: PluginCatalogRpcHandler,
     buffers: HashMap<PathBuf, Buffer>,
     terminals: HashMap<TermId, mio::channel::Sender<Msg>>,
 }
@@ -56,7 +56,7 @@ impl ProxyHandler for NewDispatcher {
             Initialize { workspace } => {
                 self.workspace = workspace;
 
-                let plugin_rpc = self.plugin_rpc.clone();
+                let plugin_rpc = self.catalog_rpc.clone();
                 let workspace = self.workspace.clone();
                 thread::spawn(move || {
                     let mut plugin =
@@ -69,7 +69,7 @@ impl ProxyHandler for NewDispatcher {
                 path,
                 position,
             } => {
-                self.plugin_rpc.completion(request_id, &path, position);
+                self.catalog_rpc.completion(request_id, &path, position);
             }
             Shutdown {} => todo!(),
             Update { path, delta, rev } => {
@@ -140,7 +140,7 @@ impl ProxyHandler for NewDispatcher {
             NewBuffer { buffer_id, path } => {
                 let buffer = Buffer::new(buffer_id, path.clone());
                 let content = buffer.rope.to_string();
-                self.plugin_rpc.document_did_open(
+                self.catalog_rpc.document_did_open(
                     &path,
                     buffer.language_id.clone(),
                     buffer.rev as i32,
@@ -308,7 +308,7 @@ impl NewDispatcher {
             workspace: None,
             proxy_rpc,
             core_rpc,
-            plugin_rpc,
+            catalog_rpc: plugin_rpc,
             buffers: HashMap::new(),
             terminals: HashMap::new(),
         }

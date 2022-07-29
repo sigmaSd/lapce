@@ -77,9 +77,15 @@ impl ProxyHandler for NewDispatcher {
             Shutdown {} => todo!(),
             Update { path, delta, rev } => {
                 let buffer = self.buffers.get_mut(&path).unwrap();
-                let text = buffer.rope.clone();
+                let old_text = buffer.rope.clone();
                 buffer.update(&delta, rev);
-                self.catalog_rpc.did_change_text_document(rev, delta, text);
+                self.catalog_rpc.did_change_text_document(
+                    &path,
+                    rev,
+                    delta,
+                    old_text,
+                    buffer.rope.clone(),
+                );
             }
             NewTerminal {
                 term_id,
@@ -1341,5 +1347,4 @@ fn file_get_head(workspace_path: &Path, path: &Path) -> Result<(String, String)>
         .with_context(|| "content bytes to string")?
         .to_string();
     Ok((id, content))
-
 }

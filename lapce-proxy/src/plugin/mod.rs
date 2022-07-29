@@ -40,7 +40,7 @@ use xi_rope::{Rope, RopeDelta};
 use crate::dispatch::Dispatcher;
 
 use self::catalog::NewPluginCatalog;
-use self::psp::{ClonableCallback, PluginServerRpcHandler, RpcCallback};
+use self::psp::{ClonableCallback, PluginServerRpcHandler};
 
 pub type PluginName = String;
 
